@@ -90,7 +90,8 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
 void setup() {
   // USE_SERIAL.begin(921600);
   USE_SERIAL.begin(115200);
-
+  
+  pinMode(LED_BUILTIN, OUTPUT);
   //Serial.setDebugOutput(true);
   USE_SERIAL.setDebugOutput(true);
 
@@ -242,10 +243,10 @@ void checkEvent(){
   if (evento.equals("setEncendido")){
     if (encendido == false){
       encendido = true;
-      //digitalWrite(LED_BUILTIN,HIGH);
+      digitalWrite(LED_BUILTIN,HIGH);
     }else{
       encendido = false;
-      //digitalWrite(LED_BUILTIN,LOW);
+      digitalWrite(LED_BUILTIN,LOW);
     }
   }
   String jsonData = a.substring(a.indexOf(',')+1,a.indexOf(']'));
