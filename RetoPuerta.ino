@@ -48,37 +48,43 @@ SocketIOclient socketIO;
 
 #define USE_SERIAL Serial
 
-void socketIOEvent(socketIOmessageType_t type, uint8_t* payload, size_t length) {
-  switch (type) {
-    case sIOtype_DISCONNECT:
-      USE_SERIAL.printf("[IOc] Disconnected!\n");
-      break;
-    case sIOtype_CONNECT:
-      USE_SERIAL.printf("[IOc] Connected to url: %s\n", payload);
+String a;
+void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length) {
+    switch(type) {
+        case sIOtype_DISCONNECT:
+            USE_SERIAL.printf("[IOc] Disconnected!\n");
+            break;
+        case sIOtype_CONNECT:
+            USE_SERIAL.printf("[IOc] Connected to url: %s\n", payload);
 
-      // join default namespace (no auto join in Socket.IO V3)
-      socketIO.send(sIOtype_CONNECT, "/");
-      break;
-    case sIOtype_EVENT:
-      USE_SERIAL.printf("[IOc] get event: %s\n", payload[0]);
-      break;
-    case sIOtype_ACK:
-      USE_SERIAL.printf("[IOc] get ack: %u\n", length);
-      hexdump(payload, length);
-      break;
-    case sIOtype_ERROR:
-      USE_SERIAL.printf("[IOc] get error: %u\n", length);
-      hexdump(payload, length);
-      break;
-    case sIOtype_BINARY_EVENT:
-      USE_SERIAL.printf("[IOc] get binary: %u\n", length);
-      hexdump(payload, length);
-      break;
-    case sIOtype_BINARY_ACK:
-      USE_SERIAL.printf("[IOc] get binary ack: %u\n", length);
-      hexdump(payload, length);
-      break;
-  }
+            // join default namespace (no auto join in Socket.IO V3)
+            socketIO.send(sIOtype_CONNECT, "/");
+            break;
+        case sIOtype_EVENT:
+            //hexdump(payload,10);
+            a = (char*)payload;
+            checkEvent();
+            Serial.print("AHHHHH: ");
+            Serial.println(a);
+            USE_SERIAL.printf("[IOc] get event: %s\n", payload);
+            break;
+        case sIOtype_ACK:
+            USE_SERIAL.printf("[IOc] get ack: %u\n", length);
+            hexdump(payload, length);
+            break;
+        case sIOtype_ERROR:
+            USE_SERIAL.printf("[IOc] get error: %u\n", length);
+            hexdump(payload, length);
+            break;
+        case sIOtype_BINARY_EVENT:
+            USE_SERIAL.printf("[IOc] get binary: %u\n", length);
+            hexdump(payload, length);
+            break;
+        case sIOtype_BINARY_ACK:
+            USE_SERIAL.printf("[IOc] get binary ack: %u\n", length);
+            hexdump(payload, length);
+            break;
+    }
 }
 
 void setup() {
@@ -192,7 +198,7 @@ void loop() {
 
   //si (encencido) Mover motor N pasos en la dirección indicada por PID(N=1 paso de momento)
   uint64_t nowMicros = micros();
-  encendido = true;
+  //encendido = true; //Usado para mantener prendido el motor (para pruebas)
   if (encendido) {
 
     uint64_t motorDelay = max(500.0,1000/(output/1000000));
@@ -227,6 +233,26 @@ void loop() {
 
   }
 }
+//--------------SocketIO--------------//
+void checkEvent(){
+  DynamicJsonDocument doc(1024);
+  String evento = a.substring(2,a.indexOf(',')-1);
+  Serial.println();
+  Serial.println(evento);
+  if (evento.equals("setEncendido")){
+    if (encendido == false){
+      encendido = true;
+      //digitalWrite(LED_BUILTIN,HIGH);
+    }else{
+      encendido = false;
+      //digitalWrite(LED_BUILTIN,LOW);
+    }
+  }
+  String jsonData = a.substring(a.indexOf(',')+1,a.indexOf(']'));
+  deserializeJson(doc, jsonData);
+  JsonObject obj = doc.as<JsonObject>();
+}
+
 
 //--------------Funciones Control--------------//
 // Obtiene la lectura del sensor
