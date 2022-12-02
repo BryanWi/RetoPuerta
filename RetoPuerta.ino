@@ -20,7 +20,7 @@ double setPoint = 50;
 double cumError, rateError;
 unsigned long PIDTimer;
 //variables control
-bool encendido = true;
+bool encendido = false;
 
 //Pines para control del driver de motores Stepper
 #define dirPin D8
@@ -49,6 +49,7 @@ SocketIOclient socketIO;
 #define USE_SERIAL Serial
 
 String a;
+String b;
 void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case sIOtype_DISCONNECT:
@@ -62,9 +63,10 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
             break;
         case sIOtype_EVENT:
             //hexdump(payload,10);
+            b = a;
             a = (char*)payload;
-            checkEvent();
             USE_SERIAL.printf("[IOc] get event: %s\n", payload);
+            checkEvent();
             break;
         case sIOtype_ACK:
             USE_SERIAL.printf("[IOc] get ack: %u\n", length);
@@ -96,7 +98,7 @@ void setup() {
   USE_SERIAL.println();
   USE_SERIAL.println();
   USE_SERIAL.println();
-
+  
   for (uint8_t t = 4; t > 0; t--) {
     USE_SERIAL.printf("[SETUP] BOOT WAIT %d...\n", t);
     USE_SERIAL.flush();
@@ -131,6 +133,7 @@ void setup() {
   //sensor.setMeasurementTimingBudget(20000);
   sensor.setTimeout(500);
   sensor.init();
+  sensor.setMeasurementTimingBudget(200000);
   /*if (!sensor.init())
   {
     Serial.println("Failed to detect and initialize sensor!");
@@ -140,11 +143,10 @@ void setup() {
   //Definir pines de salida y entrada
   pinMode(dirPin, OUTPUT);
   pinMode(stepPin, OUTPUT);
-}
+} 
 
 unsigned long messageTimestamp = 0;
 void loop() {
-  socketIO.loop();
   uint64_t now = millis();
   
   //Checar por señal de paro/cambios de variables
@@ -168,7 +170,7 @@ void loop() {
 
 
   //
-  if (now - messageTimestamp > 2000) {
+  if (now - messageTimestamp > 500) { //Tiempo de escritura
     messageTimestamp = now;
 
     // creat JSON message for Socket.IO (event)
@@ -177,7 +179,7 @@ void loop() {
 
     // add evnet name
     // Hint: socket.on('event_name', ....
-    array.add("message");
+    array.add("saveData");
 
     // add payload (parameters) for the event
     JsonObject param1 = array.createNestedObject();
@@ -192,7 +194,7 @@ void loop() {
     socketIO.sendEVENT(output);
 
     // Print JSON for debugging
-    //USE_SERIAL.println(output);
+    // USE_SERIAL.println(output);
   }
 
   //si (encencido) Mover motor N pasos en la dirección indicada por PID(N=1 paso de momento)
@@ -201,17 +203,7 @@ void loop() {
   if (encendido) {
 
     uint64_t motorDelay = max(500.0,1000/(output/1000000));
-    /*Serial.println();
     
-    Serial.print("input: ");
-    Serial.print(input);
-    Serial.print("output: ");
-    Serial.print(output);
-    
-    Serial.print("timeSinceStep: ");
-    Serial.println(nowMicros - motorTimer);
-    Serial.print(" motorDelay: ");
-    Serial.println(motorDelay);*/
     if ((nowMicros - motorTimer) >= 2500){
       motorTimer = nowMicros;
 
@@ -220,35 +212,33 @@ void loop() {
       }else{
         digitalWrite(dirPin,LOW);
       }
-      if (abs(output)>4){  
-        if (!motorOn){
-          digitalWrite(stepPin,HIGH);
-          motorOn = true;
-        } else{
-          digitalWrite(stepPin,LOW);
-          motorOn = false;
-        }
+      if (abs(output)>2){   // tolerancia de movimiento
+        digitalWrite(stepPin,HIGH);
+      } else{
+        digitalWrite(stepPin,LOW);
       }
     }
-
+  } else{
+      digitalWrite(stepPin,LOW);
   }
+  socketIO.loop();
 }
 //--------------SocketIO--------------//
+
 void checkEvent(){
   DynamicJsonDocument doc(1024);
-  String file = a;
+  a.replace("\\","");
+  String file = a.substring(a.indexOf(',')+2,a.indexOf(']')-1);
   Serial.print("file: ");
   Serial.print(file);
   Serial.print("  a: ");
-  Serial.println(a);
+  Serial.print(a);
+  Serial.print("  b: ");
+  Serial.println(b);
   deserializeJson(doc, file);
   JsonObject obj = doc.as<JsonObject>();
-
-
   String evento = a.substring(2,a.indexOf(',')-1);
-  Serial.println();
   Serial.println(evento);
-
 
   if (evento.equals("setEncendido")){
     encendido = true;
@@ -258,14 +248,26 @@ void checkEvent(){
     digitalWrite(LED_BUILTIN,HIGH);
   }else if(evento.equals("changeSP")){
     Serial.println(obj);
-    int a = obj[String("SP")];
-    Serial.println(a);
-    setPoint = a;
+    
+  for (JsonPair keyValue : obj) {
+    Serial.println(keyValue.key().c_str());
+  }
+    long newSP = obj[String("SP")];
+    Serial.println(newSP);
+
+    if (newSP > 80){
+      newSP = 80;
+    }else if (newSP < 20){
+      newSP = 20;
+    }
+    setPoint = newSP;
   }else if(evento.equals("changePID")){
     //kp=obj[String("kp")];
     //ki=obj[String("ki")];
     //kd=obj[String("kd")];
   }
+  
+  Serial.println();
 }
 
 
