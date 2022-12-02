@@ -242,7 +242,7 @@ void checkEvent(){
 
   if (evento.equals("setEncendido")){
     encendido = true;
-    digitalWrite(LED_BUILTIN,LOW); //El encendido del pin está invertido
+    digitalWrite(LED_BUILTIN,LOW); //El encendido del led pin está invertido
   }else if(evento.equals("resetEncendido")){
     encendido = false;
     digitalWrite(LED_BUILTIN,HIGH);
