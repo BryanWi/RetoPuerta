@@ -6,8 +6,8 @@ VL53L0X sensor;
 
 //Variables PID y sensor
 //https://www.teachmemicro.com/arduino-pid-control-tutorial/
-double kp = 0.5;
-double ki = 2;
+double kp = 1;
+double ki = 0;
 double kd = 0;
 
 unsigned long currentTime, previousTime;
@@ -64,8 +64,6 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
             //hexdump(payload,10);
             a = (char*)payload;
             checkEvent();
-            Serial.print("AHHHHH: ");
-            Serial.println(a);
             USE_SERIAL.printf("[IOc] get event: %s\n", payload);
             break;
         case sIOtype_ACK:
@@ -128,7 +126,7 @@ void setup() {
   socketIO.onEvent(socketIOEvent);
 
   //Sensor
-  Wire.begin(D1, D2);
+  Wire.begin(D1, D2); //SDA, SCL
 
   //sensor.setMeasurementTimingBudget(20000);
   sensor.setTimeout(500);
@@ -151,13 +149,13 @@ void loop() {
   
   //Checar por señal de paro/cambios de variables
   //Leer Sensor
-  if ((now - PIDTimer) > 2000){
+  if ((now - PIDTimer) > 250){
   PIDTimer = now;
   sensorData = leerSensor();
   input = sensorData;
   //Calcular acción con PID
   output = computePID(sensorData);
-  Serial.print(output);
+  //Serial.print(output);
   /*
   Serial.print("input: ");
   Serial.print(input);
@@ -169,7 +167,7 @@ void loop() {
   }
 
 
-
+  //
   if (now - messageTimestamp > 2000) {
     messageTimestamp = now;
 
@@ -217,18 +215,19 @@ void loop() {
     if ((nowMicros - motorTimer) >= 2500){
       motorTimer = nowMicros;
 
-      if (output >0){
+      if (output <0){
         digitalWrite(dirPin,HIGH);
       }else{
         digitalWrite(dirPin,LOW);
       }
-
-      if (!motorOn){
-        digitalWrite(stepPin,HIGH);
-        motorOn = true;
-      } else{
-        digitalWrite(stepPin,LOW);
-        motorOn = false;
+      if (abs(output)>4){  
+        if (!motorOn){
+          digitalWrite(stepPin,HIGH);
+          motorOn = true;
+        } else{
+          digitalWrite(stepPin,LOW);
+          motorOn = false;
+        }
       }
     }
 
@@ -237,21 +236,36 @@ void loop() {
 //--------------SocketIO--------------//
 void checkEvent(){
   DynamicJsonDocument doc(1024);
+  String file = a;
+  Serial.print("file: ");
+  Serial.print(file);
+  Serial.print("  a: ");
+  Serial.println(a);
+  deserializeJson(doc, file);
+  JsonObject obj = doc.as<JsonObject>();
+
+
   String evento = a.substring(2,a.indexOf(',')-1);
   Serial.println();
   Serial.println(evento);
+
+
   if (evento.equals("setEncendido")){
-    if (encendido == false){
-      encendido = true;
-      digitalWrite(LED_BUILTIN,HIGH);
-    }else{
-      encendido = false;
-      digitalWrite(LED_BUILTIN,LOW);
-    }
+    encendido = true;
+    digitalWrite(LED_BUILTIN,LOW); //El encendido del pin está invertido
+  }else if(evento.equals("resetEncendido")){
+    encendido = false;
+    digitalWrite(LED_BUILTIN,HIGH);
+  }else if(evento.equals("changeSP")){
+    Serial.println(obj);
+    int a = obj[String("SP")];
+    Serial.println(a);
+    setPoint = a;
+  }else if(evento.equals("changePID")){
+    //kp=obj[String("kp")];
+    //ki=obj[String("ki")];
+    //kd=obj[String("kd")];
   }
-  String jsonData = a.substring(a.indexOf(',')+1,a.indexOf(']'));
-  deserializeJson(doc, jsonData);
-  JsonObject obj = doc.as<JsonObject>();
 }
 
 
