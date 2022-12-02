@@ -19,6 +19,7 @@ double output;
 double setPoint = 50;
 double cumError, rateError;
 unsigned long PIDTimer;
+
 //variables control
 bool encendido = false;
 
@@ -28,7 +29,6 @@ bool encendido = false;
 #define stpRev 200
 bool motorOn = false;
 unsigned long motorTimer=0;
-
 
 //Librerias para WIFI y comunicación por Socket.IO
 #include <Arduino.h>
@@ -48,8 +48,8 @@ SocketIOclient socketIO;
 
 #define USE_SERIAL Serial
 
-String a;
-String b;
+String a; //Guarda los datos recibidos por Socket IO
+String b; //Guarda los datos recibidos en el evento pasado de Socket IO 
 void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length) {
     switch(type) {
         case sIOtype_DISCONNECT:
@@ -57,12 +57,10 @@ void socketIOEvent(socketIOmessageType_t type, uint8_t * payload, size_t length)
             break;
         case sIOtype_CONNECT:
             USE_SERIAL.printf("[IOc] Connected to url: %s\n", payload);
-
             // join default namespace (no auto join in Socket.IO V3)
             socketIO.send(sIOtype_CONNECT, "/");
             break;
         case sIOtype_EVENT:
-            //hexdump(payload,10);
             b = a;
             a = (char*)payload;
             USE_SERIAL.printf("[IOc] get event: %s\n", payload);
@@ -96,9 +94,6 @@ void setup() {
   USE_SERIAL.setDebugOutput(true);
 
   USE_SERIAL.println();
-  USE_SERIAL.println();
-  USE_SERIAL.println();
-  
   for (uint8_t t = 4; t > 0; t--) {
     USE_SERIAL.printf("[SETUP] BOOT WAIT %d...\n", t);
     USE_SERIAL.flush();
@@ -115,7 +110,6 @@ void setup() {
   //WiFi.disconnect();
   while (WiFiMulti.run() != WL_CONNECTED) {
     delay(5000);
-    //WiFiMulti.addAP("WebSocketTest", "0987654321");
   }
 
   String ip = WiFi.localIP().toString();
@@ -130,15 +124,9 @@ void setup() {
   //Sensor
   Wire.begin(D1, D2); //SDA, SCL
 
-  //sensor.setMeasurementTimingBudget(20000);
   sensor.setTimeout(500);
   sensor.init();
   sensor.setMeasurementTimingBudget(200000);
-  /*if (!sensor.init())
-  {
-    Serial.println("Failed to detect and initialize sensor!");
-    while (1) {Serial.println("Failed to detect and initialize sensor!");delay(1000);}
-  }*/
 
   //Definir pines de salida y entrada
   pinMode(dirPin, OUTPUT);
@@ -157,15 +145,6 @@ void loop() {
   input = sensorData;
   //Calcular acción con PID
   output = computePID(sensorData);
-  //Serial.print(output);
-  /*
-  Serial.print("input: ");
-  Serial.print(input);
-  Serial.print(" output: ");
-  Serial.println(output);
-  */
-  //Enviar dato del sensor
-  //enviarDato();
   }
 
 
@@ -192,18 +171,11 @@ void loop() {
 
     // Send event
     socketIO.sendEVENT(output);
-
-    // Print JSON for debugging
-    // USE_SERIAL.println(output);
   }
 
   //si (encencido) Mover motor N pasos en la dirección indicada por PID(N=1 paso de momento)
   uint64_t nowMicros = micros();
-  //encendido = true; //Usado para mantener prendido el motor (para pruebas)
   if (encendido) {
-
-    uint64_t motorDelay = max(500.0,1000/(output/1000000));
-    
     if ((nowMicros - motorTimer) >= 2500){
       motorTimer = nowMicros;
 
@@ -229,16 +201,9 @@ void checkEvent(){
   DynamicJsonDocument doc(1024);
   a.replace("\\","");
   String file = a.substring(a.indexOf(',')+2,a.indexOf(']')-1);
-  Serial.print("file: ");
-  Serial.print(file);
-  Serial.print("  a: ");
-  Serial.print(a);
-  Serial.print("  b: ");
-  Serial.println(b);
   deserializeJson(doc, file);
   JsonObject obj = doc.as<JsonObject>();
   String evento = a.substring(2,a.indexOf(',')-1);
-  Serial.println(evento);
 
   if (evento.equals("setEncendido")){
     encendido = true;
@@ -261,15 +226,9 @@ void checkEvent(){
       newSP = 20;
     }
     setPoint = newSP;
-  }else if(evento.equals("changePID")){
-    //kp=obj[String("kp")];
-    //ki=obj[String("ki")];
-    //kd=obj[String("kd")];
   }
-  
   Serial.println();
 }
-
 
 //--------------Funciones Control--------------//
 // Obtiene la lectura del sensor
@@ -291,20 +250,4 @@ double computePID(double inp) {
   previousTime = currentTime;  //remember current time
 
   return out;  //have function return the PID output
-}
-
-//--------------Funciones Stepper--------------//
-//Steps permite dar n cantidad de pasos a cierta velocidad y el la dirección indicada
-void steps(int n, int speed, bool dir) {
-  digitalWrite(dirPin, dir);
-  for (int i = 0; i < n; i++) {
-    step(speed);
-  }
-}
-//Da un solo paso con el tiempo de espera que le pasen
-void step(int speed) {
-  digitalWrite(stepPin, HIGH);
-  delayMicroseconds(speed);
-  digitalWrite(stepPin, LOW);
-  delayMicroseconds(speed);
 }
